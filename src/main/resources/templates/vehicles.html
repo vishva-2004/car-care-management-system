@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Vehicles — Car Care</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<nav class="navbar">
+    <a class="navbar-brand" href="/dashboard">Car <span>Care</span></a>
+    <div class="navbar-right">
+        <span class="nav-user"><strong id="navUsername">—</strong></span>
+        <span class="role-badge" id="roleBadge">—</span>
+        <a class="btn-logout" onclick="doLogout()">Logout</a>
+    </div>
+</nav>
+<div class="layout">
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <div class="sidebar-section" id="overviewSection">Overview</div>
+            <li id="dashLink"><a href="/dashboard"><span class="icon">📊</span> Dashboard</a></li>
+            <li id="custDashLink" style="display:none"><a href="/customer-dashboard"><span class="icon">🏠</span> My Dashboard</a></li>
+            <div class="sidebar-section">Inventory</div>
+            <li><a href="/vehicles" class="active"><span class="icon">🚗</span> Vehicles</a></li>
+            <div class="sidebar-section" id="opsSection">Operations</div>
+            <li id="salesNav"><a href="/sales"><span class="icon">💰</span> Allocate Vehicles</a></li>
+            <li id="serviceNav"><a href="/service-records"><span class="icon">🔧</span> Service Records</a></li>
+            <div class="sidebar-section" id="mgmtSection">Management</div>
+            <li id="usersNav"><a href="/users"><span class="icon">👤</span> All Users</a></li>
+        </ul>
+    </aside>
+    <main class="main-content">
+        <div class="page-header">
+            <h1>Vehicle <span>Inventory</span></h1>
+            <p>Manage all automobile records</p>
+        </div>
+        <div id="alertBox"></div>
+
+        <!-- Add form — only for Manager/Admin -->
+        <div class="card" id="addCard" style="display:none;">
+            <div class="card-header">Add New Vehicle</div>
+            <div class="card-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Brand</label><input type="text" id="brand" placeholder="e.g. Kia, Tata"></div>
+                    <div class="form-group"><label>Model</label><input type="text" id="model" placeholder="e.g. Carens, Nexon"></div>
+                    <div class="form-group"><label>Price (₹)</label><input type="number" id="price" placeholder="e.g. 1500000"></div>
+                    <div class="form-group"><label>Fuel Type</label>
+                        <select id="fuelType">
+                            <option>Petrol</option><option>Diesel</option>
+                            <option>Electric</option><option>Hybrid</option><option>CNG</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Availability</label>
+                        <select id="availability"><option>Available</option><option>Limited</option><option>Sold</option></select>
+                    </div>
+                    <div class="form-group"><label>Ready Stock</label><input type="number" id="readyStock" placeholder="e.g. 5"></div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="addVehicle()">➕ Add Vehicle</button>
+                    <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">All Vehicles <span id="vehicleCount" style="font-size:12px;color:#555;font-weight:400;"></span></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Brand</th><th>Model</th><th>Price (₹)</th><th>Fuel</th><th>Stock</th><th>Status</th><th id="actionHead"></th></tr>
+                        </thead>
+                        <tbody id="vehicleTableBody"><tr><td colspan="8" style="text-align:center;color:#555;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+function getToken() { return localStorage.getItem('jwtToken'); }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }; }
+function doLogout() { localStorage.clear(); window.location.href = '/login'; }
+
+window.onload = async function() {
+    if (!getToken()) { window.location.href = '/login'; return; }
+
+    try {
+        const me = await fetch('/user/me', { headers: authHeaders() });
+        if (!me.ok) { doLogout(); return; }
+        const data = await me.json();
+        const role = data.role;
+        localStorage.setItem('username', data.username);
+        localStorage.setItem('role', role);
+
+        document.getElementById('navUsername').textContent = data.username;
+        const badge = document.getElementById('roleBadge');
+        badge.textContent = role; badge.className = 'role-badge role-' + role.toLowerCase();
+
+        if (role === 'CUSTOMER') {
+            document.getElementById('dashLink').style.display = 'none';
+            document.getElementById('custDashLink').style.display = 'block';
+            document.getElementById('opsSection').style.display = 'none';
+            document.getElementById('salesNav').style.display = 'none';
+            document.getElementById('serviceNav').style.display = 'none';
+            document.getElementById('mgmtSection').style.display = 'none';
+            document.getElementById('usersNav').style.display = 'none';
+            document.getElementById('actionHead').textContent = 'Book';
+        } else if (role === 'STAFF') {
+            document.getElementById('mgmtSection').style.display = 'none';
+            document.getElementById('usersNav').style.display = 'none';
+            document.getElementById('salesNav').style.display = 'none';
+        } else if (role === 'ADMIN') {
+            document.getElementById('mgmtSection').style.display = 'none';
+            document.getElementById('usersNav').style.display = 'none';
+        }
+
+        if (role === 'MANAGER' || role === 'ADMIN') {
+            document.getElementById('addCard').style.display = 'block';
+            document.getElementById('actionHead').textContent = 'Action';
+        }
+        loadVehicles(role);
+    } catch(e) { doLogout(); return; }
+};
+
+let bookedVehicleIds = new Set();
+
+async function loadVehicles(role) {
+    role = role || localStorage.getItem('role') || '';
+    try {
+        // For customers, also fetch their pending bookings to disable already-booked
+        if (role === 'CUSTOMER') {
+            try {
+                const bRes = await fetch('/booking/my', { headers: authHeaders() });
+                const bData = await bRes.json();
+                bookedVehicleIds = new Set(bData.filter(b => b.status === 'PENDING').map(b => b.vehicleId));
+            } catch(e) {}
+        }
+
+        const res  = await fetch('/vechicle', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('vehicleCount').textContent = data.length + ' total';
+        const tbody = document.getElementById('vehicleTableBody');
+        if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#555;">No vehicles found.</td></tr>'; return; }
+        tbody.innerHTML = data.map((v, i) => {
+            let actionCell = '';
+            if (role === 'MANAGER' || role === 'ADMIN') {
+                actionCell = `<button class="btn btn-sm btn-danger" onclick="deleteVehicle('${v.model}')">Delete</button>`;
+            } else if (role === 'CUSTOMER') {
+                const isAvail = (v.availability||'').toUpperCase() === 'AVAILABLE' || (v.availability||'').toUpperCase() === 'LIMITED';
+                const isBooked = bookedVehicleIds.has(v.id);
+                if (isBooked) {
+                    actionCell = '<span style="color:#e67e22;font-size:12px;font-weight:600;">Requested</span>';
+                } else if (isAvail) {
+                    actionCell = `<button class="btn-book" onclick="openBookModal(${v.id}, '${v.brand} ${v.model}')">Book Now</button>`;
+                } else {
+                    actionCell = '<span style="color:#a06060;font-size:12px;">Not Available</span>';
+                }
+            }
+            return `<tr>
+                <td>${i+1}</td><td><strong>${v.brand}</strong></td><td>${v.model}</td>
+                <td>₹${Number(v.price).toLocaleString('en-IN')}</td>
+                <td>${v.fuelType}</td><td>${v.readyStock}</td>
+                <td><span class="badge badge-${(v.availability||'').toLowerCase()}">${v.availability}</span></td>
+                <td>${actionCell}</td>
+            </tr>`;
+        }).join('');
+    } catch(e) { showAlert('error', 'Failed to load vehicles.'); }
+}
+
+let selectedVehicleId = null;
+let selectedVehicleName = '';
+
+function openBookModal(vehicleId, vehicleName) {
+    selectedVehicleId   = vehicleId;
+    selectedVehicleName = vehicleName;
+    document.getElementById('modalVehicleInfo').textContent = 'Vehicle: ' + vehicleName;
+    document.getElementById('bookingNotes').value = '';
+    document.getElementById('bookingModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('bookingModal').style.display = 'none';
+    selectedVehicleId = null;
+}
+
+async function submitBooking() {
+    if (!selectedVehicleId) return;
+    const notes = document.getElementById('bookingNotes').value.trim();
+    try {
+        const res  = await fetch('/booking/request', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ vehicleId: selectedVehicleId, notes })
+        });
+        const data = await res.json();
+        closeModal();
+        if (res.ok) {
+            showAlert('success', '✅ ' + data.message);
+            loadVehicles();
+        } else {
+            showAlert('error', '❌ ' + (data.message || 'Booking failed.'));
+        }
+    } catch(e) {
+        closeModal();
+        showAlert('error', '❌ Connection error.');
+    }
+}
+
+async function addVehicle() {
+    const v = {
+        brand: document.getElementById('brand').value,
+        model: document.getElementById('model').value,
+        price: parseFloat(document.getElementById('price').value),
+        fuelType: document.getElementById('fuelType').value,
+        availability: document.getElementById('availability').value,
+        readyStock: parseInt(document.getElementById('readyStock').value)
+    };
+    if (!v.brand || !v.model || !v.price || !v.readyStock) { showAlert('error', 'Fill all fields.'); return; }
+    try {
+        const res = await fetch('/vechicle', { method:'POST', headers: authHeaders(), body: JSON.stringify(v) });
+        if (res.ok) { showAlert('success', 'Vehicle added!'); clearForm(); loadVehicles(); }
+        else { const err = await res.text(); showAlert('error', err); }
+    } catch(e) { showAlert('error', 'Connection error.'); }
+}
+
+async function deleteVehicle(model) {
+    if (!confirm(`Delete "${model}"?`)) return;
+    try {
+        const res = await fetch('/vechicle/' + encodeURIComponent(model), { method:'DELETE', headers: authHeaders() });
+        if (res.ok) { showAlert('success', 'Deleted.'); loadVehicles(); }
+        else showAlert('error', 'Delete failed.');
+    } catch(e) { showAlert('error', 'Connection error.'); }
+}
+
+function clearForm() { ['brand','model','price','readyStock'].forEach(id => document.getElementById(id).value=''); }
+function showAlert(type, msg) {
+    const box = document.getElementById('alertBox');
+    box.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    setTimeout(() => box.innerHTML='', 3500);
+}
+</script>
+<div id="bookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:32px;width:420px;box-shadow:0 20px 60px rgba(192,57,43,0.2);border:1px solid #f5c6c6;">
+        <h3 style="font-size:16px;color:#2a1a1a;margin-bottom:6px;">📋 Book Vehicle</h3>
+        <p id="modalVehicleInfo" style="font-size:13px;color:#a06060;margin-bottom:18px;"></p>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>Notes (optional)</label>
+            <textarea id="bookingNotes" rows="3" placeholder="Any notes for the manager..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary" onclick="submitBooking()" style="flex:1;">Confirm Booking</button>
+            <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">Cancel</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

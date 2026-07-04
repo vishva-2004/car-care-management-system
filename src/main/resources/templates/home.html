@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Care — Premium Vehicle Showroom</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --red:     #c0392b;
+            --red-dk:  #962d22;
+            --red-lt:  #f5e6e4;
+            --dark:    #1a0a0a;
+            --mid:     #4a2020;
+            --muted:   #a06060;
+            --bg:      #fdf7f7;
+            --white:   #ffffff;
+            --card-bg: #ffffff;
+            --border:  #f0dada;
+        }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--dark); }
+
+        /* ── NAVBAR ── */
+        .navbar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 48px; height: 64px;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        .navbar-brand {
+            font-size: 22px; font-weight: 800; color: var(--dark);
+            text-decoration: none; letter-spacing: -0.5px;
+        }
+        .navbar-brand span { color: var(--red); }
+        .nav-links { display: flex; align-items: center; gap: 12px; }
+        .btn-nav-login {
+            padding: 8px 20px; border: 1.5px solid var(--border);
+            border-radius: 8px; font-size: 14px; font-weight: 500;
+            color: var(--mid); text-decoration: none;
+            transition: all .2s;
+        }
+        .btn-nav-login:hover { border-color: var(--red); color: var(--red); }
+        .btn-nav-register {
+            padding: 8px 20px; background: var(--red);
+            border-radius: 8px; font-size: 14px; font-weight: 600;
+            color: #fff; text-decoration: none; transition: background .2s;
+        }
+        .btn-nav-register:hover { background: var(--red-dk); }
+
+        /* ── HERO ── */
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a0a0a 0%, #3a1010 45%, #c0392b 100%);
+            display: flex; align-items: center; justify-content: center;
+            padding: 100px 48px 60px;
+            position: relative; overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse 80% 60% at 70% 50%, rgba(192,57,43,0.3) 0%, transparent 70%);
+        }
+        .hero-inner {
+            max-width: 1200px; width: 100%;
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 60px; align-items: center; position: relative; z-index: 1;
+        }
+        .hero-text { color: #fff; }
+        .hero-eyebrow {
+            display: inline-block;
+            font-size: 12px; font-weight: 600; letter-spacing: 3px;
+            text-transform: uppercase; color: rgba(255,255,255,0.6);
+            margin-bottom: 20px;
+        }
+        .hero-title {
+            font-size: clamp(36px, 5vw, 62px);
+            font-weight: 900; line-height: 1.08;
+            letter-spacing: -2px; margin-bottom: 20px;
+        }
+        .hero-title span { color: #ff6b57; }
+        .hero-sub {
+            font-size: 16px; line-height: 1.7;
+            color: rgba(255,255,255,0.72); margin-bottom: 36px; max-width: 420px;
+        }
+        .hero-btns { display: flex; gap: 14px; flex-wrap: wrap; }
+        .btn-hero-primary {
+            padding: 14px 32px; background: #fff; color: var(--red);
+            border-radius: 10px; font-size: 15px; font-weight: 700;
+            text-decoration: none; transition: transform .2s, box-shadow .2s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .btn-hero-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+        .btn-hero-ghost {
+            padding: 14px 32px; border: 2px solid rgba(255,255,255,0.4);
+            border-radius: 10px; font-size: 15px; font-weight: 600;
+            color: #fff; text-decoration: none; transition: border-color .2s, background .2s;
+        }
+        .btn-hero-ghost:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
+
+        /* ── ANIMATED CAR SVG ── */
+        .hero-visual { display: flex; align-items: center; justify-content: center; }
+        .car-svg-wrap {
+            width: 100%; max-width: 520px;
+            filter: drop-shadow(0 30px 60px rgba(0,0,0,0.5));
+        }
+        .car-body-anim { animation: carFloat 3s ease-in-out infinite; transform-origin: center; }
+        @keyframes carFloat {
+            0%, 100% { transform: translateY(0px); }
+            50%       { transform: translateY(-10px); }
+        }
+        .wheel-anim { animation: wheelSpin 1.5s linear infinite; transform-box: fill-box; transform-origin: center; }
+
+        /* ── FEATURE STRIP ── */
+        .features {
+            background: var(--white); border-bottom: 1px solid var(--border);
+            padding: 22px 48px;
+        }
+        .features-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; gap: 0; justify-content: space-around; flex-wrap: wrap;
+        }
+        .feat-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 20px; font-size: 14px; font-weight: 500; color: var(--mid);
+        }
+        .feat-item .feat-icon { font-size: 20px; }
+
+        /* ── SHOWROOM SECTION ── */
+        .showroom { padding: 80px 48px; max-width: 1200px; margin: 0 auto; }
+        .section-head { text-align: center; margin-bottom: 56px; }
+        .section-head h2 {
+            font-size: clamp(28px, 4vw, 42px); font-weight: 800;
+            letter-spacing: -1px; color: var(--dark);
+        }
+        .section-head h2 span { color: var(--red); }
+        .section-head p { color: var(--muted); font-size: 15px; margin-top: 10px; }
+
+        /* ── CAR CARDS ── */
+        .car-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+            gap: 28px;
+        }
+        .car-card {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 16px; overflow: hidden;
+            transition: transform .25s, box-shadow .25s;
+            position: relative;
+        }
+        .car-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 20px 50px rgba(192,57,43,0.13);
+        }
+        .car-card-visual {
+            background: linear-gradient(135deg, #fdf0ee 0%, #fae8e5 100%);
+            padding: 28px 24px 20px; text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        /* small inline car illustration per card */
+        .car-mini-svg { width: 160px; height: 72px; }
+        .car-card-body { padding: 22px 24px; }
+        .car-top {
+            display: flex; justify-content: space-between;
+            align-items: flex-start; margin-bottom: 6px;
+        }
+        .car-brand-tag {
+            font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+            text-transform: uppercase; color: var(--red);
+        }
+        .avail-badge {
+            font-size: 11px; font-weight: 600; padding: 3px 10px;
+            border-radius: 20px;
+        }
+        .avail-badge.green { background: #d4edda; color: #1e6b35; }
+        .avail-badge.orange { background: #fff3cd; color: #8a6000; }
+        .avail-badge.sold { background: #f8d7da; color: #7a1c24; }
+        .car-name {
+            font-size: 21px; font-weight: 800; color: var(--dark);
+            letter-spacing: -0.5px; margin-bottom: 18px;
+        }
+        .car-specs {
+            display: flex; flex-direction: column; gap: 9px;
+            padding: 14px 0; border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border); margin-bottom: 18px;
+        }
+        .spec-row {
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .spec-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+        .spec-val { font-size: 13px; font-weight: 600; color: var(--mid); }
+        .spec-val.price { font-size: 16px; color: var(--red); font-weight: 800; }
+        .btn-book-card {
+            display: block; width: 100%; text-align: center;
+            padding: 13px; background: var(--red);
+            border: none; border-radius: 10px;
+            font-size: 14px; font-weight: 700; color: #fff;
+            text-decoration: none; cursor: pointer;
+            transition: background .2s, transform .15s;
+        }
+        .btn-book-card:hover { background: var(--red-dk); transform: scale(1.01); }
+        .btn-book-card:disabled { background: #ddd; color: #999; cursor: not-allowed; transform: none; }
+
+        /* ── CTA BANNER ── */
+        .cta {
+            background: linear-gradient(120deg, #1a0a0a 0%, #c0392b 100%);
+            padding: 80px 48px; text-align: center; color: #fff;
+        }
+        .cta h2 { font-size: clamp(26px,4vw,40px); font-weight: 900; letter-spacing:-1px; margin-bottom: 14px; }
+        .cta p { font-size: 16px; color: rgba(255,255,255,0.75); max-width: 520px; margin: 0 auto 32px; line-height: 1.7; }
+        .cta-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+        /* ── FOOTER ── */
+        .footer {
+            background: var(--dark); color: rgba(255,255,255,0.5);
+            padding: 32px 48px; text-align: center; font-size: 13px;
+        }
+        .footer .brand { color: #fff; font-weight: 800; font-size: 18px; }
+        .footer .brand span { color: var(--red); }
+        .footer a { color: rgba(255,255,255,0.4); text-decoration: none; }
+        .footer a:hover { color: var(--red); }
+
+        @media (max-width: 768px) {
+            .navbar { padding: 0 20px; }
+            .hero { padding: 90px 20px 50px; }
+            .hero-inner { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+            .hero-sub { max-width: 100%; }
+            .hero-btns { justify-content: center; }
+            .hero-visual { order: -1; }
+            .car-svg-wrap { max-width: 320px; }
+            .features { padding: 16px 20px; }
+            .showroom { padding: 60px 20px; }
+            .cta { padding: 60px 20px; }
+            .footer { padding: 24px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+    <a class="navbar-brand" href="/home">Car <span>Care</span></a>
+    <div class="nav-links">
+        <a class="btn-nav-login" href="/login">Login</a>
+        <a class="btn-nav-register" href="/register">Register Free</a>
+    </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-text">
+
+            <h1 class="hero-title">Find Your<br>Perfect <span>Drive</span></h1>
+            <p class="hero-sub">Browse our complete vehicle collection. Register as a customer, book your favourite car, and our team handles the rest — including service tracking for life.</p>
+            <div class="hero-btns">
+                <a href="#showroom" class="btn-hero-primary">View Showroom ↓</a>
+                <a href="/register" class="btn-hero-ghost">Register Free</a>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <!-- Animated SVG car illustration -->
+            <div class="car-svg-wrap">
+                <svg viewBox="0 0 520 260" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#e84040"/>
+                            <stop offset="100%" stop-color="#a02020"/>
+                        </linearGradient>
+                        <linearGradient id="windowGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#b8deff"/>
+                            <stop offset="100%" stop-color="#6ab4f0"/>
+                        </linearGradient>
+                        <radialGradient id="groundShadow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(0,0,0,0.25)"/>
+                            <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+                        </radialGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="blur"/>
+                            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                        </filter>
+                    </defs>
+
+                    <!-- Ground shadow -->
+                    <ellipse cx="260" cy="228" rx="185" ry="16" fill="url(#groundShadow)"/>
+
+                    <g class="car-body-anim">
+                        <!-- Car lower body -->
+                        <rect x="60" y="160" width="400" height="55" rx="12" fill="url(#bodyGrad)"/>
+                        <!-- Car upper body / cabin -->
+                        <path d="M140 160 L165 100 Q175 88 195 88 L330 88 Q350 88 360 100 L385 160 Z"
+                              fill="url(#bodyGrad)"/>
+                        <!-- Windshield -->
+                        <path d="M175 155 L197 98 Q202 91 215 91 L310 91 Q323 91 328 98 L350 155 Z"
+                              fill="url(#windowGrad)" opacity="0.88"/>
+                        <!-- Side window -->
+                        <path d="M182 150 L200 104 L300 104 L320 150 Z"
+                              fill="url(#windowGrad)" opacity="0.5"/>
+                        <!-- Window highlight -->
+                        <path d="M197 100 L207 130 L290 130 L300 100 Z"
+                              fill="rgba(255,255,255,0.18)"/>
+                        <!-- Hood highlight -->
+                        <rect x="70" y="163" width="140" height="8" rx="4" fill="rgba(255,255,255,0.15)"/>
+                        <!-- Roof shine -->
+                        <path d="M210 90 Q260 84 315 90" stroke="rgba(255,255,255,0.3)" stroke-width="3" fill="none" stroke-linecap="round"/>
+                        <!-- Door line -->
+                        <line x1="256" y1="163" x2="256" y2="215" stroke="rgba(0,0,0,0.2)" stroke-width="2"/>
+                        <!-- Door handles -->
+                        <rect x="215" y="185" width="22" height="5" rx="2.5" fill="rgba(255,255,255,0.4)"/>
+                        <rect x="276" y="185" width="22" height="5" rx="2.5" fill="rgba(255,255,255,0.4)"/>
+                        <!-- Headlight -->
+                        <ellipse cx="92" cy="183" rx="18" ry="11" fill="#fffde0" opacity="0.9" filter="url(#glow)"/>
+                        <ellipse cx="92" cy="183" rx="12" ry="7" fill="#fff"/>
+                        <!-- Tail light -->
+                        <rect x="424" y="173" width="18" height="18" rx="4" fill="#ff4444" opacity="0.9"/>
+                        <rect x="427" y="176" width="12" height="12" rx="2" fill="#ff8888"/>
+                        <!-- Front bumper detail -->
+                        <rect x="64" y="203" width="60" height="8" rx="4" fill="rgba(255,255,255,0.2)"/>
+                        <!-- Grill -->
+                        <rect x="68" y="195" width="50" height="4" rx="2" fill="rgba(0,0,0,0.3)"/>
+
+                        <!-- Wheels -->
+                        <g class="wheel-anim" style="transform-origin:135px 218px;">
+                            <circle cx="135" cy="218" r="32" fill="#1a1a2e"/>
+                            <circle cx="135" cy="218" r="24" fill="#2d2d44"/>
+                            <circle cx="135" cy="218" r="16" fill="#c0392b"/>
+                            <circle cx="135" cy="218" r="8" fill="#e0e0e0"/>
+                            <line x1="135" y1="194" x2="135" y2="242" stroke="#555" stroke-width="3"/>
+                            <line x1="111" y1="218" x2="159" y2="218" stroke="#555" stroke-width="3"/>
+                            <line x1="118" y1="201" x2="152" y2="235" stroke="#555" stroke-width="2"/>
+                            <line x1="118" y1="235" x2="152" y2="201" stroke="#555" stroke-width="2"/>
+                        </g>
+                        <g class="wheel-anim" style="transform-origin:385px 218px;">
+                            <circle cx="385" cy="218" r="32" fill="#1a1a2e"/>
+                            <circle cx="385" cy="218" r="24" fill="#2d2d44"/>
+                            <circle cx="385" cy="218" r="16" fill="#c0392b"/>
+                            <circle cx="385" cy="218" r="8" fill="#e0e0e0"/>
+                            <line x1="385" y1="194" x2="385" y2="242" stroke="#555" stroke-width="3"/>
+                            <line x1="361" y1="218" x2="409" y2="218" stroke="#555" stroke-width="3"/>
+                            <line x1="368" y1="201" x2="402" y2="235" stroke="#555" stroke-width="2"/>
+                            <line x1="368" y1="235" x2="402" y2="201" stroke="#555" stroke-width="2"/>
+                        </g>
+
+                        <!-- Wheel arches -->
+                        <path d="M100 215 Q135 185 170 215" fill="rgba(130,20,20,0.7)" stroke="rgba(130,20,20,0.5)" stroke-width="1"/>
+                        <path d="M350 215 Q385 185 420 215" fill="rgba(130,20,20,0.7)" stroke="rgba(130,20,20,0.5)" stroke-width="1"/>
+                    </g>
+                </svg>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- FEATURE STRIP -->
+<div class="features">
+    <div class="features-inner">
+        <div class="feat-item"><span class="feat-icon">🚗</span> Wide Vehicle Range</div>
+        <div class="feat-item"><span class="feat-icon">✅</span> Easy Online Booking</div>
+        <div class="feat-item"><span class="feat-icon">🔧</span> Lifetime Service Tracking</div>
+        <div class="feat-item"><span class="feat-icon">🔒</span> Secure &amp; Trusted</div>
+        <div class="feat-item"><span class="feat-icon">⚡</span> Fast Approval</div>
+    </div>
+</div>
+
+<!-- SHOWROOM GRID -->
+<section class="showroom" id="showroom">
+    <div class="section-head">
+        <h2>Our <span>Vehicle Showroom</span></h2>
+        <p>Every car is ready to drive home — book now and the manager will confirm within 24 hours.</p>
+    </div>
+    <div id="carGrid" class="car-grid">
+        <p style="text-align:center;color:#a06060;padding:40px;grid-column:1/-1;">Loading vehicles...</p>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+    <h2>Ready to Own Your Dream Car?</h2>
+    <p>Register for free and book any vehicle. Our team will contact you personally to complete the purchase.</p>
+    <div class="cta-btns">
+        <a href="/register" class="btn-hero-primary">Register Now — It's Free</a>
+        <a href="/login" class="btn-hero-ghost">Already Registered? Login</a>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+    <div class="brand">Car <span>Care</span></div>
+    <p style="margin-top:8px;">Your trusted premium automobile dealership &nbsp;·&nbsp; <a href="/login">Staff Login</a></p>
+</footer>
+
+<script>
+window.onload = async function() {
+    try {
+        const res      = await fetch('/public/vehicles');
+        const vehicles = await res.json();
+        const grid     = document.getElementById('carGrid');
+
+        if (!vehicles || vehicles.length === 0) {
+            grid.innerHTML = '<p style="text-align:center;color:#a06060;padding:40px;grid-column:1/-1;">No vehicles in the showroom right now. Check back soon!</p>';
+            return;
+        }
+
+        grid.innerHTML = vehicles.map(v => {
+            const avail = (v.availability || '').toUpperCase();
+            const isSold = avail === 'SOLD' || v.readyStock === 0;
+            const isLimited = v.readyStock > 0 && v.readyStock <= 3;
+            const badgeClass = isSold ? 'sold' : (isLimited ? 'orange' : 'green');
+            const badgeLabel = isSold ? '🚫 Sold Out' : (isLimited ? '⏳ Limited' : '✅ Available');
+
+            // Small unique coloured car SVG per card based on fuel type
+            const carColour = v.fuelType === 'Electric' ? '#27ae60'
+                            : v.fuelType === 'Diesel'   ? '#2980b9'
+                            : '#c0392b';
+            const carSvg = `<svg class="car-mini-svg" viewBox="0 0 160 72" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="cg${v.id}" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="${carColour}"/>
+                        <stop offset="100%" stop-color="${carColour}cc"/>
+                    </linearGradient>
+                    <linearGradient id="wg${v.id}" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#b8deff"/>
+                        <stop offset="100%" stop-color="#6ab4f0"/>
+                    </linearGradient>
+                </defs>
+                <rect x="14" y="43" width="132" height="18" rx="5" fill="url(#cg${v.id})"/>
+                <path d="M40 43 L50 24 Q54 18 62 18 L100 18 Q108 18 112 24 L122 43 Z" fill="url(#cg${v.id})"/>
+                <path d="M53 40 L60 22 L102 22 L110 40 Z" fill="url(#wg${v.id})" opacity="0.85"/>
+                <circle cx="40" cy="61" r="10" fill="#222"/>
+                <circle cx="40" cy="61" r="6" fill="${carColour}"/>
+                <circle cx="120" cy="61" r="10" fill="#222"/>
+                <circle cx="120" cy="61" r="6" fill="${carColour}"/>
+                <ellipse cx="22" cy="52" rx="6" ry="4" fill="#fffde0" opacity="0.9"/>
+            </svg>`;
+
+            return `<div class="car-card">
+                <div class="car-card-visual">${carSvg}</div>
+                <div class="car-card-body">
+                    <div class="car-top">
+                        <span class="car-brand-tag">${v.brand}</span>
+                        <span class="avail-badge ${badgeClass}">${badgeLabel}</span>
+                    </div>
+                    <div class="car-name">${v.model}</div>
+                    <div class="car-specs">
+                        <div class="spec-row">
+                            <span class="spec-label">Fuel Type</span>
+                            <span class="spec-val">${v.fuelType}</span>
+                        </div>
+                        <div class="spec-row">
+                            <span class="spec-label">Price</span>
+                            <span class="spec-val price">₹${Number(v.price).toLocaleString('en-IN')}</span>
+                        </div>
+                    </div>
+                    <a href="/login" class="btn-book-card" ${isSold ? 'style="background:#ccc;cursor:not-allowed;pointer-events:none;"' : ''}>
+                        ${isSold ? 'Sold Out' : 'Book This Car →'}
+                    </a>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('carGrid').innerHTML =
+            '<p style="text-align:center;color:#c0392b;padding:40px;grid-column:1/-1;">Could not load vehicles. Please try again later.</p>';
+    }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Users — Car Care</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<nav class="navbar">
+    <a class="navbar-brand" href="/dashboard">Car <span>Care</span></a>
+    <div class="navbar-right">
+        <span class="nav-user"><strong id="navUsername">—</strong></span>
+        <span class="role-badge" id="roleBadge">—</span>
+        <a class="btn-logout" onclick="doLogout()">Logout</a>
+    </div>
+</nav>
+<div class="layout">
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <div class="sidebar-section">Overview</div>
+            <li><a href="/dashboard"><span class="icon">📊</span> Dashboard</a></li>
+            <div class="sidebar-section">Inventory</div>
+            <li><a href="/vehicles"><span class="icon">🚗</span> Vehicles</a></li>
+            <div class="sidebar-section">Operations</div>
+            <li><a href="/sales"><span class="icon">💰</span> Allocate Vehicles</a></li>
+            <li><a href="/service-records"><span class="icon">🔧</span> Service Records</a></li>
+            <div class="sidebar-section">Management</div>
+            <li><a href="/users" class="active"><span class="icon">👤</span> All Users</a></li>
+        </ul>
+    </aside>
+    <main class="main-content">
+        <div class="page-header">
+            <h1>User <span>Management</span></h1>
+            <p>Manage all registered system users</p>
+        </div>
+        <div id="alertBox"></div>
+
+        <!-- Pending Approvals -->
+        <div class="card" id="pendingCard">
+            <div class="card-header">⏳ Pending Approvals <span id="pendingCount" style="font-size:12px;color:#c0392b;font-weight:400;"></span></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Username</th><th>Requested Role</th><th>Actions</th></tr></thead>
+                        <tbody id="pendingTableBody"><tr><td colspan="4" style="text-align:center;color:#a06060;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vehicle Booking Requests -->
+        <div class="card" id="bookingRequestsCard">
+            <div class="card-header">📋 Vehicle Booking Requests <span id="bookingCount" style="font-size:12px;color:#c0392b;font-weight:400;"></span></div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    To approve a request, go to <a href="/sales" style="color:#c0392b;font-weight:600;">Allocate Vehicles</a> and allocate the matching car to the customer — that automatically approves their booking.
+                </p>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Price (₹)</th><th>Booked On</th><th>Notes</th><th>Actions</th></tr></thead>
+                        <tbody id="bookingTableBody"><tr><td colspan="7" style="text-align:center;color:#a06060;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Manager (MANAGER only) -->
+        <div class="card" id="addManagerCard">
+            <div class="card-header">➕ Add New Manager</div>
+            <div class="card-body">
+                <div class="form-grid">
+                    <div class="form-group"><label>Username</label><input type="text" id="mgUsername" placeholder="Manager username"></div>
+                    <div class="form-group"><label>Password</label><input type="password" id="mgPassword" placeholder="Manager password"></div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="addManager()">Add Manager</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Users -->
+        <div class="card">
+            <div class="card-header">All Users <span id="userCount" style="font-size:12px;color:#a06060;font-weight:400;"></span></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody id="allUsersBody"><tr><td colspan="5" style="text-align:center;color:#a06060;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="resetPwdModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:32px;width:400px;box-shadow:0 20px 60px rgba(192,57,43,0.2);border:1px solid #f5c6c6;">
+        <h3 style="font-size:16px;color:#2a1a1a;margin-bottom:6px;">🔑 Reset Password</h3>
+        <p id="resetModalLabel" style="font-size:13px;color:#a06060;margin-bottom:18px;"></p>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>New Password</label>
+            <input type="password" id="newPwdInput" placeholder="Enter new password">
+        </div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary" onclick="submitReset()" style="flex:1;">Reset Password</button>
+            <button class="btn btn-secondary" onclick="closeResetModal()" style="flex:1;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function getToken() { return localStorage.getItem('jwtToken'); }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }; }
+function doLogout() { localStorage.clear(); window.location.href = '/login'; }
+function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+let resetTargetId = null;
+let resetTargetName = '';
+
+window.onload = function() {
+    if (!getToken()) { window.location.href = '/login'; return; }
+    const role = localStorage.getItem('role');
+    // Allow MANAGER and ADMIN — all others go back to dashboard
+    if (role !== 'MANAGER' && role !== 'ADMIN') { window.location.href = '/dashboard'; return; }
+
+    document.getElementById('navUsername').textContent = localStorage.getItem('username');
+    const badge = document.getElementById('roleBadge');
+    badge.textContent = role;
+    badge.className = 'role-badge role-' + role.toLowerCase();
+
+    // ADMIN cannot add managers — hide that section
+    if (role === 'ADMIN') {
+        document.getElementById('addManagerCard').style.display = 'none';
+    }
+
+    loadPending();
+    loadBookingRequests();
+    loadAllUsers();
+};
+
+async function loadPending() {
+    try {
+        const res  = await fetch('/user/pending', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('pendingCount').textContent = data.length + ' pending';
+        const tbody = document.getElementById('pendingTableBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#a06060;">No pending approvals 🎉</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map((u, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${u.username}</strong></td>
+                <td><span class="badge badge-${(u.requestedRole||'').replace('ROLE_','').toLowerCase()}">${(u.requestedRole||'—').replace('ROLE_','')}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="approveUser(${u.id})">✅ Approve</button>
+                    <button class="btn btn-sm btn-danger" onclick="rejectUser(${u.id})" style="margin-left:6px;">❌ Reject</button>
+                </td>
+            </tr>`).join('');
+    } catch(e) { showAlert('error', 'Failed to load pending users.'); }
+}
+
+async function loadBookingRequests() {
+    try {
+        const res  = await fetch('/booking/pending', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('bookingCount').textContent = data.length + ' pending';
+        const tbody = document.getElementById('bookingTableBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#a06060;">No pending booking requests.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map((b, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${b.username}</strong></td>
+                <td>${b.brand} ${b.model}</td>
+                <td>₹${Number(b.price).toLocaleString('en-IN')}</td>
+                <td>${formatDate(b.bookingDate)}</td>
+                <td style="color:#7a4040;font-size:12px;">${b.notes || '—'}</td>
+                <td>
+                    <a class="btn btn-sm btn-success" href="/sales">✅ Allocate</a>
+                    <button class="btn btn-sm btn-danger" onclick="rejectBooking(${b.id})" style="margin-left:6px;">❌ Reject</button>
+                </td>
+            </tr>`).join('');
+    } catch(e) { showAlert('error', 'Failed to load booking requests.'); }
+}
+
+async function loadAllUsers() {
+    try {
+        const res  = await fetch('/user/all', { headers: authHeaders() });
+        const data = await res.json();
+        const currentUser = localStorage.getItem('username');
+        document.getElementById('userCount').textContent = data.length + ' total';
+        const tbody = document.getElementById('allUsersBody');
+        tbody.innerHTML = data.map((u, i) => {
+            const isSelf = u.username === currentUser;
+            const myRole = localStorage.getItem('role');
+            let actions = '—';
+            if (!isSelf) {
+                const resetBtn = myRole === 'MANAGER'
+                    ? `<button class="btn btn-sm btn-secondary" onclick="openResetModal(${u.id}, '${u.username}')" style="margin-right:6px;">🔑 Reset Pwd</button>`
+                    : '';
+                actions = `${resetBtn}<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${u.username}')">Delete</button>`;
+            }
+            return `<tr>
+                <td>${i+1}</td>
+                <td><strong>${u.username}</strong>${isSelf ? ' <span style="font-size:10px;color:#c0392b;">(you)</span>' : ''}</td>
+                <td>${u.roles.map(r => `<span class="badge badge-${r.toLowerCase()}">${r}</span>`).join(' ')}</td>
+                <td><span class="badge badge-${(u.status||'').toLowerCase()}">${u.status}</span></td>
+                <td>${actions}</td>
+            </tr>`;
+        }).join('');
+    } catch(e) { showAlert('error', 'Failed to load users.'); }
+}
+
+async function approveUser(id) {
+    try {
+        const res  = await fetch('/user/approve/' + id, { method:'POST', headers: authHeaders() });
+        const text = await res.text();
+        let msg = text;
+        try { msg = JSON.parse(text).message || text; } catch(e) {}
+        if (res.ok) { showAlert('success', '✅ ' + msg); loadPending(); loadAllUsers(); }
+        else { showAlert('error', '❌ Approve failed: ' + msg); }
+    } catch(e) { showAlert('error', '❌ Connection error during approval.'); }
+}
+
+async function rejectUser(id) {
+    if (!confirm('Reject this user? They will not be able to login.')) return;
+    try {
+        const res  = await fetch('/user/reject/' + id, { method:'POST', headers: authHeaders() });
+        const text = await res.text();
+        let msg = text;
+        try { msg = JSON.parse(text).message || text; } catch(e) {}
+        if (res.ok) { showAlert('success', '🚫 ' + msg); loadPending(); loadAllUsers(); }
+        else { showAlert('error', '❌ Reject failed: ' + msg); }
+    } catch(e) { showAlert('error', '❌ Connection error during rejection.'); }
+}
+
+async function rejectBooking(id) {
+    if (!confirm('Reject this booking request?')) return;
+    try {
+        const res  = await fetch('/booking/reject/' + id, { method:'POST', headers: authHeaders() });
+        const data = await res.json();
+        if (res.ok) { showAlert('success', '🚫 ' + data.message); loadBookingRequests(); }
+        else { showAlert('error', '❌ ' + (data.message || 'Failed.')); }
+    } catch(e) { showAlert('error', '❌ Connection error.'); }
+}
+
+async function deleteUser(id, name) {
+    if (!confirm(`Permanently delete user "${name}"? This cannot be undone.`)) return;
+    try {
+        const res = await fetch('/user/' + id, { method:'DELETE', headers: authHeaders() });
+        if (res.ok) { showAlert('success', `🗑️ User "${name}" deleted.`); loadAllUsers(); loadPending(); }
+        else { showAlert('error', '❌ Delete failed. Try again.'); }
+    } catch(e) { showAlert('error', '❌ Connection error during delete.'); }
+}
+
+async function addManager() {
+    const username = document.getElementById('mgUsername').value.trim();
+    const password = document.getElementById('mgPassword').value;
+    if (!username || !password) { showAlert('error', 'Fill both fields.'); return; }
+    const res  = await fetch('/user/add-manager', {
+        method:'POST', headers: authHeaders(),
+        body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (res.ok) {
+        showAlert('success', data.message);
+        document.getElementById('mgUsername').value = '';
+        document.getElementById('mgPassword').value = '';
+        loadAllUsers();
+    } else { showAlert('error', typeof data === 'string' ? data : JSON.stringify(data)); }
+}
+
+function openResetModal(id, name) {
+    resetTargetId   = id;
+    resetTargetName = name;
+    document.getElementById('resetModalLabel').textContent = 'Resetting password for: ' + name;
+    document.getElementById('newPwdInput').value = '';
+    document.getElementById('resetPwdModal').style.display = 'flex';
+}
+
+function closeResetModal() {
+    document.getElementById('resetPwdModal').style.display = 'none';
+    resetTargetId = null;
+}
+
+async function submitReset() {
+    const newPassword = document.getElementById('newPwdInput').value;
+    if (!newPassword || newPassword.length < 4) {
+        showAlert('error', 'Password must be at least 4 characters.'); return;
+    }
+    try {
+        const res  = await fetch('/user/reset-password/' + resetTargetId, {
+            method:'POST', headers: authHeaders(),
+            body: JSON.stringify({ newPassword })
+        });
+        const data = await res.json();
+        closeResetModal();
+        if (res.ok) { showAlert('success', '🔑 ' + data.message); }
+        else { showAlert('error', '❌ ' + (data.message || 'Reset failed.')); }
+    } catch(e) { showAlert('error', '❌ Connection error.'); }
+}
+
+function showAlert(type, msg) {
+    const box = document.getElementById('alertBox');
+    box.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    setTimeout(() => box.innerHTML = '', 5000);
+}
+</script>
+</body>
+</html>

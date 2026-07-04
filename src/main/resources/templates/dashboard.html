@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard — Car Care</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<nav class="navbar">
+    <a class="navbar-brand" href="/dashboard">Car <span>Care</span></a>
+    <div class="navbar-right">
+        <span class="nav-user">Welcome, <strong id="navUsername">—</strong></span>
+        <span class="role-badge" id="roleBadge">—</span>
+        <a class="btn-logout" onclick="doLogout()">Logout</a>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <div class="sidebar-section">Overview</div>
+            <li><a href="/dashboard" class="active"><span class="icon">📊</span> Dashboard</a></li>
+            <div class="sidebar-section">Inventory</div>
+            <li><a href="/vehicles"><span class="icon">🚗</span> Vehicles</a></li>
+            <div class="sidebar-section" id="opsSection">Operations</div>
+            <li id="salesNavDash"><a href="/sales"><span class="icon">💰</span> Allocate Vehicles</a></li>
+            <li><a href="/service-records"><span class="icon">🔧</span> Service Records</a></li>
+            <div class="sidebar-section" id="mgmtSection">Management</div>
+            <li id="usersNavItem">
+                <a href="/users"><span class="icon">👤</span> All Users <span id="sidebarDot" class="notif-dot" style="display:none;"></span></a>
+            </li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="page-header">
+            <h1>Dashboard <span>Overview</span></h1>
+            <p>Welcome back — here's what's happening today</p>
+        </div>
+
+        <div id="pendingBanner" style="display:none;" class="alert alert-warning">
+            ⏳ <span id="pendingCount">0</span> user(s) waiting for approval.
+            <a href="/users" style="color:#9a7d0a;font-weight:600;margin-left:8px;">Review now →</a>
+        </div>
+
+        <div id="bookingBanner" style="display:none;" class="alert alert-error">
+            📋 <span id="bookingCountBanner">0</span> vehicle booking request(s) from customers waiting to be allocated.
+            <a href="/sales" style="color:#c0392b;font-weight:600;margin-left:8px;">Allocate now →</a>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Vehicles</div>
+                <div class="stat-value" id="totalVehicles">—</div>
+                <div class="stat-icon">🚗</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Available</div>
+                <div class="stat-value" id="availableVehicles">—</div>
+                <div class="stat-icon">✅</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="stat-label">Vehicles Sold</div>
+                <div class="stat-value" id="totalCustomers">—</div>
+                <div class="stat-icon">👥</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-label">Pending Approvals</div>
+                <div class="stat-value" id="pendingApprovals">—</div>
+                <div class="stat-icon">⏳</div>
+            </div>
+            <div class="stat-card red" id="bookingStatCard" style="display:none;">
+                <div class="stat-label">Booking Requests</div>
+                <div class="stat-value" id="bookingRequestsStat">—</div>
+                <div class="stat-icon">📋</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Recent Vehicles
+                <a href="/vehicles" class="btn btn-sm btn-primary">View All →</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Brand</th><th>Model</th><th>Price (₹)</th><th>Fuel</th><th>Stock</th><th>Status</th></tr>
+                        </thead>
+                        <tbody id="vehicleTableBody">
+                            <tr><td colspan="7" style="text-align:center;color:#a06060;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="alertBox"></div>
+
+        <!-- Change Password -->
+        <div class="card">
+            <div class="card-header">🔒 Change Password</div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    If you received a temporary password (from the forgot password option), please change it here.
+                </p>
+                <div id="pwAlertBox"></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Current Password</label>
+                        <input type="password" id="currentPw" placeholder="Enter your current password">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" id="newPw" placeholder="At least 6 characters">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <input type="password" id="confirmPw" placeholder="Repeat new password">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="changePassword()">🔒 Update Password</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+function getToken()    { return localStorage.getItem('jwtToken'); }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }; }
+function doLogout()    { localStorage.clear(); window.location.href = '/login'; }
+
+window.onload = async function() {
+    const token = getToken();
+    if (!token) { window.location.href = '/login'; return; }
+
+    let role = localStorage.getItem('role');
+    // If role is missing (stale/empty localStorage), fetch from server
+    if (!role) {
+        try {
+            const me = await fetch('/user/me', { headers: authHeaders() });
+            if (!me.ok) { doLogout(); return; }
+            const d = await me.json();
+            localStorage.setItem('username', d.username);
+            localStorage.setItem('role', d.role);
+            role = d.role;
+        } catch(e) { doLogout(); return; }
+    }
+
+    if (role === 'CUSTOMER') { window.location.href = '/customer-dashboard'; return; }
+
+    document.getElementById('navUsername').textContent = localStorage.getItem('username') || 'User';
+    const badge = document.getElementById('roleBadge');
+    badge.textContent  = role || 'USER';
+    badge.className    = 'role-badge role-' + (role || 'staff').toLowerCase();
+
+    if (role === 'STAFF') {
+        document.getElementById('pendingApprovals').textContent = 'N/A';
+        document.getElementById('mgmtSection').style.display    = 'none';
+        document.getElementById('usersNavItem').style.display   = 'none';
+        document.getElementById('salesNavDash').style.display   = 'none';
+    }
+
+    if (role === 'ADMIN') {
+        document.getElementById('mgmtSection').style.display    = 'none';
+        document.getElementById('usersNavItem').style.display   = 'none';
+    }
+
+    if (role === 'MANAGER' || role === 'ADMIN') {
+        try {
+            const res     = await fetch('/user/pending', { headers: authHeaders() });
+            const pending = await res.json();
+            document.getElementById('pendingApprovals').textContent = pending.length;
+            if (pending.length > 0) {
+                document.getElementById('pendingBanner').style.display    = 'block';
+                document.getElementById('pendingCount').textContent       = pending.length;
+                document.getElementById('sidebarDot').style.display       = 'inline-block';
+            }
+        } catch(e) { document.getElementById('pendingApprovals').textContent = '—'; }
+
+        try {
+            const res      = await fetch('/booking/pending', { headers: authHeaders() });
+            const bookings = await res.json();
+            if (bookings.length > 0) {
+                document.getElementById('bookingStatCard').style.display    = 'block';
+                document.getElementById('bookingRequestsStat').textContent  = bookings.length;
+                document.getElementById('bookingBanner').style.display      = 'block';
+                document.getElementById('bookingCountBanner').textContent   = bookings.length;
+                document.getElementById('sidebarDot').style.display         = 'inline-block';
+            }
+        } catch(e) {}
+    }
+
+    await loadVehicles();
+    await loadCustomers();
+};
+
+async function loadVehicles() {
+    try {
+        const res  = await fetch('/vechicle', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('totalVehicles').textContent = data.length;
+        const avail = data.filter(v => (v.availability || '').toLowerCase() === 'available').length;
+        document.getElementById('availableVehicles').textContent = avail;
+        const tbody = document.getElementById('vehicleTableBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#a06060;">No vehicles added yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.slice(0, 5).map((v, i) =>
+            '<tr>' +
+            '<td>' + (i+1) + '</td>' +
+            '<td><strong>' + v.brand + '</strong></td>' +
+            '<td>' + v.model + '</td>' +
+            '<td>₹' + Number(v.price).toLocaleString('en-IN') + '</td>' +
+            '<td>' + v.fuelType + '</td>' +
+            '<td>' + v.readyStock + '</td>' +
+            '<td><span class="badge badge-' + (v.availability||'').toLowerCase() + '">' + v.availability + '</span></td>' +
+            '</tr>'
+        ).join('');
+    } catch(e) {}
+}
+
+async function loadCustomers() {
+    try {
+        const role = localStorage.getItem('role');
+        if (role === 'STAFF') { document.getElementById('totalCustomers').textContent = 'N/A'; return; }
+        const res  = await fetch('/sale', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('totalCustomers').textContent = data.length;
+    } catch(e) { document.getElementById('totalCustomers').textContent = '—'; }
+}
+
+async function changePassword() {
+    const currentPw = document.getElementById('currentPw').value;
+    const newPw     = document.getElementById('newPw').value;
+    const confirmPw = document.getElementById('confirmPw').value;
+
+    if (!currentPw || !newPw || !confirmPw) {
+        showPwAlert('error', 'Please fill in all password fields.');
+        return;
+    }
+    if (newPw !== confirmPw) {
+        showPwAlert('error', 'New password and confirm password do not match.');
+        return;
+    }
+    if (newPw.length < 6) {
+        showPwAlert('error', 'Password must be at least 6 characters.');
+        return;
+    }
+
+    try {
+        const res  = await fetch('/user/change-password', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw, confirmPassword: confirmPw })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showPwAlert('success', '✅ ' + data.message);
+            document.getElementById('currentPw').value = '';
+            document.getElementById('newPw').value     = '';
+            document.getElementById('confirmPw').value = '';
+        } else {
+            showPwAlert('error', '❌ ' + (data.message || 'Could not change password.'));
+        }
+    } catch(e) {
+        showPwAlert('error', 'Connection error. Please try again.');
+    }
+}
+
+function showPwAlert(type, msg) {
+    const box = document.getElementById('pwAlertBox');
+    box.innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+    setTimeout(() => box.innerHTML = '', 5000);
+}
+</script>
+</body>
+</html>

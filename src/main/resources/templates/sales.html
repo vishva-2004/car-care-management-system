@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><title>Allocate Vehicles — Car Care</title><link rel="stylesheet" th:href="@{/css/style.css}"></head>
+<body>
+<nav class="navbar">
+    <a class="navbar-brand" href="/dashboard">Car <span>Care</span></a>
+    <div class="navbar-right">
+        <span class="nav-user">Welcome, <strong id="navUsername">—</strong></span>
+        <span class="role-badge" id="roleBadge">—</span>
+        <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+</nav>
+<div class="layout">
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <div class="sidebar-section">Overview</div>
+            <li><a href="/dashboard"><span class="icon">📊</span> Dashboard</a></li>
+            <div class="sidebar-section">Inventory</div>
+            <li><a href="/vehicles"><span class="icon">🚗</span> Vehicles</a></li>
+            <div class="sidebar-section">Operations</div>
+            <li><a href="/sales" class="active"><span class="icon">💰</span> Allocate Vehicles</a></li>
+            <li><a href="/service-records"><span class="icon">🔧</span> Service Records</a></li>
+            <div class="sidebar-section" id="mgmtSection">Management</div>
+            <li id="usersNav"><a href="/users"><span class="icon">👤</span> All Users</a></li>
+        </ul>
+    </aside>
+    <main class="main-content">
+        <div class="page-header"><h1>Allocate <span>Vehicles</span></h1><p>Approve booking requests and allocate cars to customer accounts</p></div>
+        <div id="alertBox"></div>
+
+        <div class="card">
+            <div class="card-header">📋 Pending Booking Requests <span id="bookingCount" style="font-size:12px;color:#c0392b;font-weight:400;"></span></div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">Click <strong>Allocate</strong> to confirm the sale and add the car to that customer's account immediately.</p>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Price (₹)</th><th>Booked On</th><th>Notes</th><th>Action</th></tr></thead>
+                        <tbody id="bookingTableBody"><tr><td colspan="7" style="text-align:center;color:#555;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">➕ Manual Allocation</div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">For walk-in customers — pick the customer account and vehicle directly.</p>
+                <div class="form-grid">
+                    <div class="form-group"><label>Vehicle</label><select id="vehicleId"><option value="">Select vehicle...</option></select></div>
+                    <div class="form-group"><label>Customer Account</label><select id="userId"><option value="">Select customer account...</option></select></div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="manualAllocate()">💰 Allocate Vehicle</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Recent Allocations</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Vehicle</th><th>Customer</th><th>Allocated On</th></tr></thead>
+                        <tbody id="salesTableBody"><tr><td colspan="4" style="text-align:center;color:#555;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+function getToken() { return localStorage.getItem('jwtToken'); }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }; }
+function doLogout() { localStorage.clear(); window.location.href = '/login'; }
+function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+window.onload = async function() {
+    if (!getToken()) { window.location.href = '/login'; return; }
+
+    // Always fetch from server so navbar is correct even if localStorage is stale
+    try {
+        const me = await fetch('/user/me', { headers: authHeaders() });
+        if (!me.ok) { doLogout(); return; }
+        const data = await me.json();
+        const role = data.role;
+        localStorage.setItem('username', data.username);
+        localStorage.setItem('role', role);
+
+        document.getElementById('navUsername').textContent = data.username;
+        const badge = document.getElementById('roleBadge');
+        badge.textContent = role;
+        badge.className = 'role-badge role-' + role.toLowerCase();
+
+        if (role === 'CUSTOMER' || role === 'STAFF') { window.location.href = '/dashboard'; return; }
+        if (role === 'ADMIN') {
+            document.getElementById('mgmtSection').style.display = 'none';
+            document.getElementById('usersNav').style.display = 'none';
+        }
+    } catch(e) { doLogout(); return; }
+
+    await loadDropdowns();
+    await loadBookingRequests();
+    await loadSales();
+};
+
+async function loadDropdowns() {
+    // Reset dropdowns first to avoid duplicates on reload
+    document.getElementById('vehicleId').innerHTML = '<option value="">Select vehicle...</option>';
+    document.getElementById('userId').innerHTML = '<option value="">Select customer account...</option>';
+
+    try {
+        const vRes = await fetch('/vechicle', { headers: authHeaders() });
+        if (vRes.ok) {
+            const vehicles = await vRes.json();
+            const vSel = document.getElementById('vehicleId');
+            vehicles.filter(v => (v.availability||'').toUpperCase() !== 'SOLD').forEach(v => {
+                const o = document.createElement('option');
+                o.value = v.id;
+                o.textContent = v.brand + ' ' + v.model + ' (Stock: ' + v.readyStock + ')';
+                vSel.appendChild(o);
+            });
+        }
+    } catch(e) {}
+
+    try {
+        const uRes = await fetch('/user/customers', { headers: authHeaders() });
+        if (uRes.ok) {
+            const users = await uRes.json();
+            const uSel = document.getElementById('userId');
+            if (users.length === 0) {
+                const o = document.createElement('option');
+                o.disabled = true;
+                o.textContent = 'No approved customer accounts yet';
+                uSel.appendChild(o);
+            } else {
+                users.forEach(u => {
+                    const o = document.createElement('option');
+                    o.value = u.id;
+                    o.textContent = u.username;
+                    uSel.appendChild(o);
+                });
+            }
+        }
+    } catch(e) {}
+}
+
+async function loadBookingRequests() {
+    try {
+        const res  = await fetch('/booking/pending', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('bookingCount').textContent = data.length + ' pending';
+        const tbody = document.getElementById('bookingTableBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#555;">No pending booking requests.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map((b, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${b.username}</strong></td>
+                <td>${b.brand} ${b.model}</td>
+                <td>₹${Number(b.price).toLocaleString('en-IN')}</td>
+                <td>${formatDate(b.bookingDate)}</td>
+                <td style="color:#7a4040;font-size:12px;">${b.notes || '—'}</td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="allocateFromBooking(${b.vehicleId}, ${b.userId})">✅ Allocate</button>
+                    <button class="btn btn-sm btn-danger" onclick="rejectBooking(${b.id})" style="margin-left:6px;">❌ Reject</button>
+                </td>
+            </tr>`).join('');
+    } catch(e) { showAlert('error', 'Failed to load booking requests.'); }
+}
+
+async function allocateFromBooking(vehicleId, userId) { await doAllocate(vehicleId, userId); }
+
+async function manualAllocate() {
+    const vehicleId = document.getElementById('vehicleId').value;
+    const userId    = document.getElementById('userId').value;
+    if (!vehicleId || !userId) { showAlert('error', 'Please select both a vehicle and a customer account.'); return; }
+    await doAllocate(vehicleId, userId);
+}
+
+async function doAllocate(vehicleId, userId) {
+    try {
+        const res = await fetch('/sale/allocate', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ vehicleId: parseInt(vehicleId), userId: parseInt(userId) })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            showAlert('success', '✅ Vehicle allocated! Customer has been notified.');
+            await loadBookingRequests();
+            await loadSales();
+            await loadDropdowns();
+        } else {
+            showAlert('error', '❌ ' + (data.message || 'Allocation failed.'));
+        }
+    } catch(e) { showAlert('error', '❌ Connection error.'); }
+}
+
+async function rejectBooking(id) {
+    if (!confirm('Reject this booking request?')) return;
+    try {
+        const res  = await fetch('/booking/reject/' + id, { method:'POST', headers: authHeaders() });
+        const data = await res.json();
+        if (res.ok) { showAlert('success', '🚫 ' + data.message); loadBookingRequests(); }
+        else { showAlert('error', '❌ ' + (data.message || 'Failed.')); }
+    } catch(e) { showAlert('error', '❌ Connection error.'); }
+}
+
+async function loadSales() {
+    try {
+        const res  = await fetch('/sale', { headers: authHeaders() });
+        const data = await res.json();
+        const tbody = document.getElementById('salesTableBody');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;">No vehicles allocated yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.slice().reverse().map((s, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${s.vehicleBrand || ''} ${s.vehicleModel || ''}</strong></td>
+                <td>${s.username || '—'}</td>
+                <td>${formatDate(s.saleDate)}</td>
+            </tr>`).join('');
+    } catch(e) {
+        document.getElementById('salesTableBody').innerHTML =
+            '<tr><td colspan="4" style="text-align:center;color:#555;">Could not load allocations.</td></tr>';
+    }
+}
+
+function showAlert(type, msg) {
+    const box = document.getElementById('alertBox');
+    box.innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+    setTimeout(() => box.innerHTML = '', 4000);
+}
+</script>
+</body></html>

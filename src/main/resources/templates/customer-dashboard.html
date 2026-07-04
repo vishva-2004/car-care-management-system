@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>My Dashboard — Car Care</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<nav class="navbar">
+    <a class="navbar-brand" href="/customer-dashboard">Car <span>Care</span></a>
+    <div class="navbar-right">
+        <span class="nav-user">Welcome, <strong id="navUsername">—</strong></span>
+        <span class="role-badge role-customer">CUSTOMER</span>
+        <div class="notif-bell-wrap" style="position:relative;">
+            <button class="notif-bell-btn" onclick="toggleNotifPanel()" title="Notifications">
+                🔔
+                <span id="notifBadge" class="notif-badge" style="display:none;">0</span>
+            </button>
+            <div id="notifPanel" class="notif-panel" style="display:none;">
+                <div class="notif-panel-header">
+                    Notifications
+                    <button class="notif-read-all" onclick="markAllRead()">Mark all read</button>
+                </div>
+                <div id="notifList" class="notif-list">
+                    <div style="padding:20px;text-align:center;color:#a06060;font-size:13px;">Loading...</div>
+                </div>
+            </div>
+        </div>
+        <a class="btn-logout" onclick="doLogout()">Logout</a>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <div class="sidebar-section">My Account</div>
+            <li><a href="/customer-dashboard" class="active"><span class="icon">🏠</span> My Dashboard</a></li>
+            <div class="sidebar-section">Browse</div>
+            <li><a href="/vehicles"><span class="icon">🚗</span> Available Cars</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="page-header">
+            <h1>My <span>Dashboard</span></h1>
+            <p>Your car ownership and service overview</p>
+        </div>
+
+        <div id="serviceBanner" style="display:none;" class="service-banner">
+            <div class="banner-icon">🔧</div>
+            <div class="banner-text">
+                <h4>Service Reminder</h4>
+                <p id="bannerText">—</p>
+            </div>
+        </div>
+
+        <div id="notLinkedBox" style="display:none;" class="alert alert-warning">
+            ⚠️ You don't own any vehicles yet. Browse the showroom, book a car, and once the manager allocates it to your account it will appear here.
+        </div>
+
+        <div id="alertBox"></div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">My Cars</div>
+                <div class="stat-value" id="myCarsCount">—</div>
+                <div class="stat-icon">🚗</div>
+            </div>
+            <div class="stat-card blue" onclick="showServiceHistoryModal()" style="cursor:pointer;" title="Click to view full service history">
+                <div class="stat-label">Last Service <span style="font-size:10px;color:#a06060;">(tap for details)</span></div>
+                <div class="stat-value" id="lastServiceStat" style="font-size:15px;padding-top:6px;">—</div>
+                <div class="stat-icon">📅</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Next Service</div>
+                <div class="stat-value" id="nextServiceStat" style="font-size:15px;padding-top:6px;">—</div>
+                <div class="stat-icon">🔧</div>
+            </div>
+            <div class="stat-card red" id="pendingRequestCard" onclick="handlePendingClick()" style="cursor:pointer;" title="Click to view pending requests">
+                <div class="stat-label">Pending Requests</div>
+                <div class="stat-value" id="myBookingCount">0</div>
+                <div class="stat-icon">📋</div>
+            </div>
+        </div>
+
+        <div id="vehiclesContainer">
+            <div class="card">
+                <div class="card-header">My Vehicles</div>
+                <div class="card-body" style="text-align:center;padding:40px;color:#a06060;">
+                    Loading your vehicles...
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                🚗 Available Cars — Browse &amp; Book
+                <a href="/vehicles" class="btn btn-sm btn-secondary">View All</a>
+            </div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    Found a car you like? Click <strong style="color:#c0392b;">Book Now</strong> — your request goes to the manager who will confirm and arrange the purchase with you.
+                </p>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Brand</th><th>Model</th><th>Price (₹)</th><th>Fuel</th><th>Status</th><th>Action</th></tr>
+                        </thead>
+                        <tbody id="browseTableBody">
+                            <tr><td colspan="7" style="text-align:center;color:#a06060;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="serviceRecordsCard">
+            <div class="card-header">🔧 My Service Records</div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    View your car's service history and request a new service below.
+                </p>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr><th>#</th><th>Vehicle</th><th>Date</th><th>Description</th><th>Status</th></tr>
+                        </thead>
+                        <tbody id="myServiceBody">
+                            <tr><td colspan="5" style="text-align:center;color:#a06060;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="requestServiceCard" style="display:none;">
+            <div class="card-header">📅 Request a Service</div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    Select one of your vehicles and describe what needs attention. The manager will approve and arrange pickup.
+                </p>
+                <div id="svcAlertBox"></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Select Your Vehicle</label>
+                        <select id="svcVehicleId"><option value="">Select vehicle...</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="svcDescription" placeholder="e.g. Oil change, brake check, AC service">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="submitServiceRequest()">📅 Request Service</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">🛒 How the Booking Process Works</div>
+            <div class="card-body">
+                <p style="font-size:14px;color:#7a4040;line-height:1.9;">
+                    <strong style="color:#c0392b;">Step 1:</strong> Browse available cars in the table above<br>
+                    <strong style="color:#c0392b;">Step 2:</strong> Click <em>Book Now</em> on your preferred vehicle<br>
+                    <strong style="color:#c0392b;">Step 3:</strong> Manager reviews your booking request and contacts you<br>
+                    <strong style="color:#c0392b;">Step 4:</strong> Once approved, the car is automatically added to your account!<br>
+                    <strong style="color:#c0392b;">Step 5:</strong> Car appears in "My Vehicles" above with service tracking
+                </p>
+            </div>
+        </div>
+
+        <!-- Change Password Section -->
+        <div class="card">
+            <div class="card-header">🔒 Change Password</div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    If you received a temporary password, change it here to something you'll remember.
+                </p>
+                <div id="pwAlertBox"></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Current Password</label>
+                        <input type="password" id="currentPw" placeholder="Enter your current password">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" id="newPw" placeholder="At least 6 characters">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <input type="password" id="confirmPw" placeholder="Repeat new password">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="changePassword()">🔒 Change Password</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="pendingRequestsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:32px;width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(192,57,43,0.2);border:1px solid #f5c6c6;">
+        <h3 style="font-size:16px;color:#2a1a1a;margin-bottom:6px;">📋 My Pending Requests</h3>
+        <p style="font-size:13px;color:#a06060;margin-bottom:18px;">Your active booking and service requests</p>
+        <div id="pendingRequestsContent"></div>
+        <div style="margin-top:20px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('pendingRequestsModal').style.display='none'">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="serviceHistoryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:32px;width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(192,57,43,0.2);border:1px solid #f5c6c6;">
+        <h3 style="font-size:16px;color:#2a1a1a;margin-bottom:6px;">📅 Service History</h3>
+        <p style="font-size:13px;color:#a06060;margin-bottom:18px;">All completed services for your vehicle(s)</p>
+        <div id="serviceHistoryContent"></div>
+        <div style="margin-top:20px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('serviceHistoryModal').style.display='none'">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="bookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:32px;width:420px;box-shadow:0 20px 60px rgba(192,57,43,0.2);border:1px solid #f5c6c6;">
+        <h3 style="font-size:16px;color:#2a1a1a;margin-bottom:6px;">📋 Book Vehicle</h3>
+        <p id="modalVehicleInfo" style="font-size:13px;color:#a06060;margin-bottom:18px;"></p>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>Notes (optional)</label>
+            <textarea id="bookingNotes" rows="3" placeholder="Any notes for the manager (e.g. preferred colour, loan needed...)"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary" onclick="submitBooking()" style="flex:1;">Confirm Booking</button>
+            <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function getToken()    { return localStorage.getItem('jwtToken'); }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }; }
+function doLogout()    { localStorage.clear(); window.location.href = '/login'; }
+function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+let selectedVehicleId   = null;
+let selectedVehicleName = '';
+let bookedVehicleIds    = new Set();
+let notifPanelOpen      = false;
+
+window.onload = async function() {
+    const token = getToken();
+    const role  = localStorage.getItem('role');
+    if (!token) { window.location.href = '/login'; return; }
+    if (role && role !== 'CUSTOMER') { window.location.href = '/dashboard'; return; }
+    document.getElementById('navUsername').textContent = localStorage.getItem('username') || 'Customer';
+
+    await Promise.all([
+        loadMyVehicles(),
+        loadBrowseCars(),
+        loadMyServiceRecords(),
+        loadNotifications()
+    ]);
+};
+
+async function loadNotifications() {
+    try {
+        const res  = await fetch('/notification/my', { headers: authHeaders() });
+        const data = await res.json();
+        const unread = data.unread || 0;
+        const badge  = document.getElementById('notifBadge');
+        if (unread > 0) {
+            badge.textContent  = unread > 9 ? '9+' : unread;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+        renderNotifications(data.notifications || []);
+    } catch(e) {}
+}
+
+function renderNotifications(notifications) {
+    const list = document.getElementById('notifList');
+    if (!notifications.length) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#a06060;font-size:13px;">No notifications yet.</div>';
+        return;
+    }
+    list.innerHTML = notifications.slice(0, 15).map(n =>
+        '<div class="notif-item ' + (n.read ? '' : 'unread') + '" onclick="markRead(' + n.id + ', this)">' +
+        '<div class="notif-msg">' + n.message + '</div>' +
+        '<div class="notif-time">' + formatDate(n.createdAt) + '</div>' +
+        '</div>'
+    ).join('');
+}
+
+function toggleNotifPanel() {
+    const panel   = document.getElementById('notifPanel');
+    notifPanelOpen = !notifPanelOpen;
+    panel.style.display = notifPanelOpen ? 'block' : 'none';
+    if (notifPanelOpen) loadNotifications();
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.notif-bell-wrap')) {
+        document.getElementById('notifPanel').style.display = 'none';
+        notifPanelOpen = false;
+    }
+});
+
+async function markRead(id, el) {
+    try {
+        await fetch('/notification/read/' + id, { method:'POST', headers: authHeaders() });
+        el.classList.remove('unread');
+        await loadNotifications();
+    } catch(e) {}
+}
+
+async function markAllRead() {
+    try {
+        await fetch('/notification/read-all', { method:'POST', headers: authHeaders() });
+        await loadNotifications();
+    } catch(e) {}
+}
+
+async function loadMyVehicles() {
+    try {
+        const res  = await fetch('/user/my-vehicles', { headers: authHeaders() });
+        const data = await res.json();
+
+        if (!data.linked) {
+            document.getElementById('notLinkedBox').style.display = 'block';
+            document.getElementById('myCarsCount').textContent = '0';
+            document.getElementById('nextServiceStat').textContent = 'N/A';
+            document.getElementById('lastServiceStat').textContent = 'N/A';
+            document.getElementById('vehiclesContainer').innerHTML =
+                '<div class="card"><div class="card-header">My Vehicles</div>' +
+                '<div class="card-body" style="text-align:center;padding:40px;color:#a06060;">' +
+                'No vehicles yet. Browse and book a car below!</div></div>';
+            return;
+        }
+
+        const vehicles = data.vehicles;
+        document.getElementById('myCarsCount').textContent = vehicles.length;
+
+        // Load pending requests count (booking PENDING + service PENDING)
+        try {
+            const bRes = await fetch('/booking/my', { headers: authHeaders() });
+            const bData = await bRes.json();
+            const sRes = await fetch('/serviceRecords/my', { headers: authHeaders() });
+            const sData = await sRes.json();
+            const pendingBookings = bData.filter(b => b.status === 'PENDING');
+            const pendingServices = sData.filter(s => s.status === 'PENDING');
+            const totalPending = pendingBookings.length + pendingServices.length;
+            bookedVehicleIds = new Set(pendingBookings.map(b => b.vehicleId));
+            document.getElementById('myBookingCount').textContent = totalPending;
+            const card = document.getElementById('pendingRequestCard');
+            if (totalPending > 0) {
+                card.style.opacity = '1';
+                card.style.cursor = 'pointer';
+                card.title = 'Tap to see your pending requests';
+            } else {
+                card.style.opacity = '0.5';
+                card.style.cursor = 'default';
+                card.title = 'No pending requests';
+            }
+        } catch(e) { document.getElementById('myBookingCount').textContent = '0'; }
+
+        if (vehicles.length === 0) {
+            document.getElementById('nextServiceStat').textContent = 'N/A';
+            document.getElementById('lastServiceStat').textContent = 'N/A';
+            document.getElementById('vehiclesContainer').innerHTML =
+                '<div class="card"><div class="card-header">My Vehicles</div>' +
+                '<div class="card-body" style="text-align:center;padding:40px;color:#a06060;">' +
+                'No vehicles purchased yet. Browse and book below!</div></div>';
+            return;
+        }
+
+        const withService = vehicles.filter(v => v.nextServiceDate);
+        if (withService.length > 0) {
+            withService.sort((a, b) => new Date(a.nextServiceDate) - new Date(b.nextServiceDate));
+            const soonest  = withService[0];
+            document.getElementById('nextServiceStat').textContent = formatDate(soonest.nextServiceDate);
+            document.getElementById('lastServiceStat').textContent = formatDate(soonest.lastServiceDate);
+            const today    = new Date();
+            const nextDate = new Date(soonest.nextServiceDate);
+            const daysLeft = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+            const banner   = document.getElementById('serviceBanner');
+            banner.style.display = 'flex';
+            document.getElementById('bannerText').textContent = daysLeft <= 0
+                ? 'Service for your ' + soonest.brand + ' ' + soonest.model + ' is OVERDUE! Please visit the service centre.'
+                : 'Next service for your ' + soonest.brand + ' ' + soonest.model + ' is due in ' + daysLeft + ' day(s) — ' + formatDate(soonest.nextServiceDate) + '.';
+        } else {
+            document.getElementById('nextServiceStat').textContent = 'Not scheduled';
+            document.getElementById('lastServiceStat').textContent = 'No service yet';
+        }
+
+        let html = '<div class="card"><div class="card-header">My Vehicles</div><div class="card-body">';
+
+        // Populate service request dropdown + show the card
+        const svcSel = document.getElementById('svcVehicleId');
+        svcSel.innerHTML = '<option value="">Select vehicle...</option>';
+        vehicles.forEach(v => {
+            const o = document.createElement('option');
+            o.value = v.vehicleId;
+            o.textContent = v.brand + ' ' + v.model;
+            svcSel.appendChild(o);
+        });
+        document.getElementById('requestServiceCard').style.display = 'block';
+        vehicles.forEach(v => {
+            const today     = new Date();
+            const nextDate  = v.nextServiceDate ? new Date(v.nextServiceDate) : null;
+            const isOverdue = nextDate && nextDate < today;
+            const isDueSoon = nextDate && !isOverdue && (nextDate - today) / (1000 * 60 * 60 * 24) <= 30;
+            const icon = isOverdue ? '⚠️' : (isDueSoon ? '⏰' : '✅');
+            const alertClass = (isOverdue || isDueSoon) ? '' : 'ok';
+            const msg  = isOverdue
+                ? 'Service OVERDUE since ' + formatDate(v.nextServiceDate) + '! Please visit immediately.'
+                : (v.nextServiceDate
+                    ? 'Next service: ' + formatDate(v.nextServiceDate)
+                    : 'No service record yet — visit showroom for first service.');
+            html += '<div class="vehicle-card">' +
+                '<h3>🚗 ' + v.brand + ' <span>' + v.model + '</span></h3>' +
+                '<div class="vehicle-meta">' +
+                '<div class="meta-item"><label>Fuel Type</label><span>' + v.fuelType + '</span></div>' +
+                '<div class="meta-item"><label>Purchase Price</label><span>₹' + Number(v.price).toLocaleString('en-IN') + '</span></div>' +
+                '<div class="meta-item"><label>Purchase Date</label><span>' + formatDate(v.saleDate) + '</span></div>' +
+                '<div class="meta-item"><label>Last Service</label><span>' + formatDate(v.lastServiceDate) + '</span></div>' +
+                '<div class="meta-item"><label>Last Service Note</label><span>' + (v.lastServiceDesc || '—') + '</span></div>' +
+                '<div class="meta-item"><label>Next Service Due</label><span>' + formatDate(v.nextServiceDate) + '</span></div>' +
+                '</div>' +
+                '<div class="service-alert ' + alertClass + '">' + icon + ' ' + msg + '</div>' +
+                '</div>';
+        });
+        html += '</div></div>';
+        document.getElementById('vehiclesContainer').innerHTML = html;
+
+    } catch(e) {
+        document.getElementById('alertBox').innerHTML =
+            '<div class="alert alert-error">Could not load vehicle data. Please re-login.</div>';
+    }
+}
+
+async function loadMyBookings() {
+    try {
+        const res  = await fetch('/booking/my', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('myBookingCount').textContent = data.length;
+        bookedVehicleIds = new Set(data.filter(b => b.status === 'PENDING').map(b => b.vehicleId));
+        const tbody = document.getElementById('myBookingsBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#a06060;">No bookings yet. Browse cars below and click Book Now!</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map((b, i) =>
+            '<tr><td>' + (i+1) + '</td>' +
+            '<td><strong>' + b.brand + '</strong></td>' +
+            '<td>' + b.model + '</td>' +
+            '<td>₹' + Number(b.price).toLocaleString('en-IN') + '</td>' +
+            '<td>' + formatDate(b.bookingDate) + '</td>' +
+            '<td><span class="badge badge-booking-' + b.status.toLowerCase() + '">' + b.status + '</span></td>' +
+            '</tr>'
+        ).join('');
+    } catch(e) {
+        document.getElementById('myBookingCount').textContent = '0';
+    }
+}
+
+async function loadBrowseCars() {
+    try {
+        const res      = await fetch('/vechicle', { headers: authHeaders() });
+        const vehicles = await res.json();
+        const tbody    = document.getElementById('browseTableBody');
+        if (vehicles.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#a06060;">No vehicles in showroom yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = vehicles.map((v, i) => {
+            const isAvail    = (v.availability || '').toUpperCase() === 'AVAILABLE';
+            const isBooked   = bookedVehicleIds.has(v.id);
+            const btnLabel   = isBooked ? 'Requested' : 'Book Now';
+            const btnDisabled = (!isAvail || isBooked) ? 'disabled' : '';
+            return '<tr>' +
+                '<td>' + (i+1) + '</td>' +
+                '<td><strong>' + v.brand + '</strong></td>' +
+                '<td>' + v.model + '</td>' +
+                '<td>₹' + Number(v.price).toLocaleString('en-IN') + '</td>' +
+                '<td>' + v.fuelType + '</td>' +
+                '<td><span class="badge badge-' + (v.availability||'').toLowerCase() + '">' + v.availability + '</span></td>' +
+                '<td><button class="btn-book" ' + btnDisabled + ' onclick="openBookModal(' + v.id + ', \'' + v.brand + ' ' + v.model + '\')">' + btnLabel + '</button></td>' +
+                '</tr>';
+        }).join('');
+    } catch(e) {}
+}
+
+function openBookModal(vehicleId, vehicleName) {
+    selectedVehicleId   = vehicleId;
+    selectedVehicleName = vehicleName;
+    document.getElementById('modalVehicleInfo').textContent = 'Vehicle: ' + vehicleName;
+    document.getElementById('bookingNotes').value = '';
+    document.getElementById('bookingModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('bookingModal').style.display = 'none';
+    selectedVehicleId = null;
+}
+
+async function submitBooking() {
+    if (!selectedVehicleId) return;
+    const notes = document.getElementById('bookingNotes').value.trim();
+    try {
+        const res  = await fetch('/booking/request', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ vehicleId: selectedVehicleId, notes })
+        });
+        const data = await res.json();
+        closeModal();
+        if (res.ok) {
+            showAlert('success', '✅ ' + data.message);
+            await loadMyBookings();
+            await loadBrowseCars();
+        } else {
+            showAlert('error', '❌ ' + (data.message || 'Booking failed.'));
+        }
+    } catch(e) {
+        closeModal();
+        showAlert('error', '❌ Connection error. Please try again.');
+    }
+}
+
+async function changePassword() {
+    const currentPw = document.getElementById('currentPw').value;
+    const newPw     = document.getElementById('newPw').value;
+    const confirmPw = document.getElementById('confirmPw').value;
+
+    if (!currentPw || !newPw || !confirmPw) {
+        showPwAlert('error', 'Please fill in all password fields.');
+        return;
+    }
+    if (newPw !== confirmPw) {
+        showPwAlert('error', 'New password and confirm password do not match.');
+        return;
+    }
+    if (newPw.length < 6) {
+        showPwAlert('error', 'New password must be at least 6 characters.');
+        return;
+    }
+
+    try {
+        const res  = await fetch('/user/change-password', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw, confirmPassword: confirmPw })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showPwAlert('success', '✅ ' + data.message);
+            document.getElementById('currentPw').value = '';
+            document.getElementById('newPw').value = '';
+            document.getElementById('confirmPw').value = '';
+        } else {
+            showPwAlert('error', '❌ ' + (data.message || 'Failed to change password.'));
+        }
+    } catch(e) {
+        showPwAlert('error', 'Connection error. Please try again.');
+    }
+}
+
+async function loadMyServiceRecords() {
+    try {
+        const res  = await fetch('/serviceRecords/my', { headers: authHeaders() });
+        const data = await res.json();
+        const tbody = document.getElementById('myServiceBody');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a06060;">No service records yet.</td></tr>';
+        } else {
+            tbody.innerHTML = data.map((r, i) =>
+                '<tr>' +
+                '<td>' + (i+1) + '</td>' +
+                '<td><strong>' + r.brand + ' ' + r.model + '</strong></td>' +
+                '<td>' + formatDate(r.serviceDate) + '</td>' +
+                '<td style="font-size:12px;color:#7a4040;">' + (r.description || '—') + '</td>' +
+                '<td><span class="badge badge-' + r.status.toLowerCase() + '">' + r.status + '</span></td>' +
+                '</tr>'
+            ).join('');
+        }
+    } catch(e) {
+        document.getElementById('myServiceBody').innerHTML =
+            '<tr><td colspan="5" style="text-align:center;color:#a06060;">Could not load service records.</td></tr>';
+    }
+}
+
+async function submitServiceRequest() {
+    const vehicleId   = document.getElementById('svcVehicleId').value;
+    const description = document.getElementById('svcDescription').value.trim();
+    if (!vehicleId)   { showSvcAlert('error', 'Please select a vehicle.'); return; }
+    if (!description) { showSvcAlert('error', 'Please describe what service you need.'); return; }
+    try {
+        const res  = await fetch('/serviceRecords/request', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ vehicleId: parseInt(vehicleId), description })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showSvcAlert('success', '✅ ' + data.message);
+            document.getElementById('svcDescription').value = '';
+            await loadMyServiceRecords();
+        } else {
+            showSvcAlert('error', '❌ ' + (data.message || 'Failed.'));
+        }
+    } catch(e) { showSvcAlert('error', '❌ Connection error.'); }
+}
+
+function showSvcAlert(type, msg) {
+    const box = document.getElementById('svcAlertBox');
+    box.innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+    setTimeout(() => box.innerHTML = '', 4000);
+}
+
+function handlePendingClick() {
+    const count = parseInt(document.getElementById('myBookingCount').textContent || '0');
+    if (count > 0) showPendingRequestsModal();
+}
+
+async function showPendingRequestsModal() {
+    const modal = document.getElementById('pendingRequestsModal');
+    const content = document.getElementById('pendingRequestsContent');
+    modal.style.display = 'flex';
+    content.innerHTML = '<p style="color:#a06060;text-align:center;">Loading...</p>';
+    try {
+        const bRes = await fetch('/booking/my', { headers: authHeaders() });
+        const bData = await bRes.json();
+        const sRes = await fetch('/serviceRecords/my', { headers: authHeaders() });
+        const sData = await sRes.json();
+        const pendingBookings = bData.filter(b => b.status === 'PENDING');
+        const pendingServices = sData.filter(s => s.status === 'PENDING');
+        let html = '';
+        if (pendingBookings.length > 0) {
+            html += '<p style="font-weight:700;color:#2a1a1a;margin-bottom:10px;">🚗 Vehicle Booking Requests</p>';
+            html += pendingBookings.map(b => `
+                <div style="border:1px solid #f0dada;border-radius:8px;padding:14px;margin-bottom:10px;">
+                    <div style="font-weight:700;color:#2a1a1a;">${b.brand} ${b.model}</div>
+                    <div style="font-size:12px;color:#a06060;margin:4px 0;">📅 Requested: ${formatDate(b.bookingDate)}</div>
+                    <div style="font-size:13px;color:#c0392b;font-weight:600;">Status: PENDING — Manager will review and allocate your car.</div>
+                </div>`).join('');
+        }
+        if (pendingServices.length > 0) {
+            html += '<p style="font-weight:700;color:#2a1a1a;margin:14px 0 10px;">🔧 Service Requests</p>';
+            html += pendingServices.map(s => `
+                <div style="border:1px solid #f0dada;border-radius:8px;padding:14px;margin-bottom:10px;">
+                    <div style="font-weight:700;color:#2a1a1a;">${s.brand} ${s.model}</div>
+                    <div style="font-size:12px;color:#a06060;margin:4px 0;">📅 Requested: ${formatDate(s.serviceDate)}</div>
+                    <div style="font-size:13px;color:#7a4040;">${s.description}</div>
+                    <div style="font-size:13px;color:#c0392b;font-weight:600;margin-top:4px;">Status: PENDING — Staff will contact you for doorstep pickup.</div>
+                </div>`).join('');
+        }
+        if (html === '') html = '<p style="color:#a06060;text-align:center;">No pending requests.</p>';
+        content.innerHTML = html;
+    } catch(e) {
+        content.innerHTML = '<p style="color:#c0392b;text-align:center;">Could not load requests.</p>';
+    }
+}
+
+async function showServiceHistoryModal() {
+    const modal = document.getElementById('serviceHistoryModal');
+    const content = document.getElementById('serviceHistoryContent');
+    modal.style.display = 'flex';
+    content.innerHTML = '<p style="color:#a06060;text-align:center;">Loading...</p>';
+    try {
+        const res  = await fetch('/serviceRecords/my', { headers: authHeaders() });
+        const data = await res.json();
+        const completed = data.filter(r => r.status === 'COMPLETED');
+        if (completed.length === 0) {
+            content.innerHTML = '<p style="color:#a06060;text-align:center;">No completed services yet.</p>';
+            return;
+        }
+        content.innerHTML = completed.map(r => `
+            <div style="border:1px solid #f0dada;border-radius:8px;padding:14px;margin-bottom:12px;">
+                <div style="font-weight:700;color:#2a1a1a;">${r.brand} ${r.model}</div>
+                <div style="font-size:12px;color:#a06060;margin:4px 0;">📅 ${formatDate(r.serviceDate)}</div>
+                <div style="font-size:13px;color:#4a2020;margin-top:6px;">${r.description || '—'}</div>
+            </div>`).join('');
+    } catch(e) {
+        content.innerHTML = '<p style="color:#c0392b;text-align:center;">Could not load service history.</p>';
+    }
+}
+
+function showAlert(type, msg) {
+    const box = document.getElementById('alertBox');
+    box.innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+    setTimeout(() => box.innerHTML = '', 5000);
+}
+
+function showPwAlert(type, msg) {
+    const box = document.getElementById('pwAlertBox');
+    box.innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+    setTimeout(() => box.innerHTML = '', 5000);
+}
+</script>
+</body>
+</html>

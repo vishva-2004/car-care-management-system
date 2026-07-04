@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Register — Car Care</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <h1>Car <span>Care</span></h1>
+            <p>Create your account</p>
+        </div>
+        <div id="alertBox"></div>
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="username" placeholder="Choose a username">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" placeholder="Choose a password">
+        </div>
+        <div class="form-group">
+            <label>Register as</label>
+            <select id="role">
+                <option value="CUSTOMER">Customer</option>
+                <option value="STAFF">Staff (requires Manager approval)</option>
+                <option value="ADMIN">Admin (requires Manager approval)</option>
+            </select>
+        </div>
+        <div id="pendingNote" style="display:none;" class="alert alert-warning">
+            ⚠️ Staff and Admin accounts need Manager approval before you can login.
+        </div>
+        <button class="btn btn-primary" onclick="doRegister()">Create Account</button>
+        <div class="auth-footer">
+            Already have an account? <a href="/login">Login here</a>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('role').addEventListener('change', function() {
+    const note = document.getElementById('pendingNote');
+    note.style.display = (this.value !== 'CUSTOMER') ? 'block' : 'none';
+});
+async function doRegister() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const role = document.getElementById('role').value;
+    const alertBox = document.getElementById('alertBox');
+    if (!username || !password) { alertBox.innerHTML = '<div class="alert alert-error">Please fill all fields.</div>'; return; }
+    try {
+        const res = await fetch('/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, role })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alertBox.innerHTML = `<div class="alert alert-success">✅ ${data.message}</div>`;
+            if (data.status === 'APPROVED') setTimeout(() => window.location.href = '/login', 1500);
+        } else {
+            alertBox.innerHTML = `<div class="alert alert-error">${typeof data === 'string' ? data : JSON.stringify(data)}</div>`;
+        }
+    } catch(e) {
+        alertBox.innerHTML = '<div class="alert alert-error">Connection error.</div>';
+    }
+}
+</script>
+</body>
+</html>

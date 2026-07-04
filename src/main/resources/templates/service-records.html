@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><title>Service Records — Car Care</title><link rel="stylesheet" th:href="@{/css/style.css}"></head>
+<body>
+<nav class="navbar">
+    <a class="navbar-brand" href="/dashboard">Car <span>Care</span></a>
+    <div class="navbar-right">
+        <span class="nav-user"><strong id="navUsername">—</strong></span>
+        <span class="role-badge" id="roleBadge">—</span>
+        <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+</nav>
+<div class="layout">
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <div class="sidebar-section">Overview</div>
+            <li><a href="/dashboard"><span class="icon">📊</span> Dashboard</a></li>
+            <div class="sidebar-section">Inventory</div>
+            <li><a href="/vehicles"><span class="icon">🚗</span> Vehicles</a></li>
+            <div class="sidebar-section" id="opsSection">Operations</div>
+            <li id="salesNav"><a href="/sales"><span class="icon">💰</span> Allocate Vehicles</a></li>
+            <li><a href="/service-records" class="active"><span class="icon">🔧</span> Service Records</a></li>
+            <div class="sidebar-section" id="mgmtSection">Management</div>
+            <li id="usersNav"><a href="/users"><span class="icon">👤</span> All Users</a></li>
+        </ul>
+    </aside>
+    <main class="main-content">
+        <div class="page-header"><h1>Service <span>Records</span></h1><p>Customer service requests and maintenance log</p></div>
+        <div id="alertBox"></div>
+
+        <!-- Pending service requests from customers (Manager/Admin approve) -->
+        <div class="card" id="pendingCard">
+            <div class="card-header">⏳ Pending Service Requests <span id="pendingCount" style="font-size:12px;color:#c0392b;font-weight:400;"></span></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Requested On</th><th>Notes</th><th>Action</th></tr></thead>
+                        <tbody id="pendingTableBody"><tr><td colspan="6" style="text-align:center;color:#555;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approved, awaiting work (Staff/Manager/Admin completes) -->
+        <div class="card" id="approvedCard">
+            <div class="card-header">🔧 Approved — Awaiting Service <span id="approvedCount" style="font-size:12px;color:#1e8449;font-weight:400;"></span></div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    Once the car arrives and the work is done, mark it complete and note what was changed (e.g. engine oil, air filter).
+                </p>
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Action</th></tr></thead>
+                        <tbody id="approvedTableBody"><tr><td colspan="4" style="text-align:center;color:#555;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Direct log (Staff/Manager/Admin can log a completed service without a prior request) -->
+        <div class="card">
+            <div class="card-header">➕ Log a Completed Service</div>
+            <div class="card-body">
+                <p style="font-size:13px;color:#a06060;margin-bottom:16px;">
+                    Select the customer — their vehicle is automatically found since each customer owns one car.
+                </p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Customer Account</label>
+                        <select id="userId"><option value="">Select customer...</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Service Date</label>
+                        <input type="date" id="serviceDate">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="description" placeholder="e.g. Oil change, air filter replaced">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="addRecord()">🔧 Save Record</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">All Completed Services</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table>
+                        <thead><tr><th>#</th><th>Customer</th><th>Vehicle</th><th>Date</th><th>Description</th></tr></thead>
+                        <tbody id="allTableBody"><tr><td colspan="5" style="text-align:center;color:#555;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Complete Service Modal -->
+<div id="completeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;padding:32px;width:420px;box-shadow:0 20px 60px rgba(192,57,43,0.2);border:1px solid #f5c6c6;">
+        <h3 style="font-size:16px;color:#2a1a1a;margin-bottom:6px;">🔧 Complete Service</h3>
+        <p id="completeModalInfo" style="font-size:13px;color:#a06060;margin-bottom:18px;"></p>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>What was done</label>
+            <textarea id="completeNotes" rows="3" placeholder="e.g. Engine oil changed, air filter replaced, brake pads checked"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary" onclick="submitComplete()" style="flex:1;">Mark Completed</button>
+            <button class="btn btn-secondary" onclick="closeCompleteModal()" style="flex:1;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function getToken() { return localStorage.getItem('jwtToken'); }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() }; }
+function doLogout() { localStorage.clear(); window.location.href = '/login'; }
+function formatDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+let completeTargetId = null;
+
+window.onload = async function() {
+    if (!getToken()) { window.location.href = '/login'; return; }
+
+    try {
+        const me = await fetch('/user/me', { headers: authHeaders() });
+        if (!me.ok) { doLogout(); return; }
+        const data = await me.json();
+        const role = data.role;
+        localStorage.setItem('username', data.username);
+        localStorage.setItem('role', role);
+
+        document.getElementById('navUsername').textContent = data.username;
+        const badge = document.getElementById('roleBadge');
+        badge.textContent = role;
+        badge.className = 'role-badge role-' + role.toLowerCase();
+
+        if (role === 'CUSTOMER') { window.location.href = '/customer-dashboard'; return; }
+        if (role === 'STAFF') {
+            document.getElementById('mgmtSection').style.display = 'none';
+            document.getElementById('usersNav').style.display = 'none';
+            document.getElementById('salesNav').style.display = 'none';
+        } else if (role === 'ADMIN') {
+            document.getElementById('mgmtSection').style.display = 'none';
+            document.getElementById('usersNav').style.display = 'none';
+        }
+
+        document.getElementById('serviceDate').valueAsDate = new Date();
+        await loadDropdowns(role);
+        await loadPending();
+        await loadApproved();
+        await loadAll();
+    } catch(e) { doLogout(); return; }
+};
+
+async function loadDropdowns(role) {
+    document.getElementById('userId').innerHTML = '<option value="">Select customer...</option>';
+
+    try {
+        const cRes = await fetch('/user/customers', { headers: authHeaders() });
+        if (cRes.ok) {
+            const customers = await cRes.json();
+            const cSel = document.getElementById('userId');
+            if (customers.length === 0) {
+                const o = document.createElement('option');
+                o.disabled = true;
+                o.textContent = 'No approved customers yet';
+                cSel.appendChild(o);
+            } else {
+                customers.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id;
+                    o.textContent = c.username;
+                    cSel.appendChild(o);
+                });
+            }
+        }
+    } catch(e) {}
+}
+
+async function loadPending() {
+    try {
+        const res  = await fetch('/serviceRecords/pending', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('pendingCount').textContent = data.length + ' pending';
+        const tbody = document.getElementById('pendingTableBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#555;">No pending service requests.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map((r, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${r.username}</strong></td>
+                <td>${r.brand} ${r.model}</td>
+                <td>${formatDate(r.serviceDate)}</td>
+                <td style="font-size:12px;color:#7a4040;">${r.description || '—'}</td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="approveService(${r.id})">✅ Approve</button>
+                    <button class="btn btn-sm btn-danger" onclick="rejectService(${r.id})" style="margin-left:6px;">❌ Reject</button>
+                </td>
+            </tr>`).join('');
+    } catch(e) { showAlert('error', 'Failed to load pending service requests.'); }
+}
+
+async function loadApproved() {
+    try {
+        const res  = await fetch('/serviceRecords/approved', { headers: authHeaders() });
+        const data = await res.json();
+        document.getElementById('approvedCount').textContent = data.length + ' waiting';
+        const tbody = document.getElementById('approvedTableBody');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#555;">Nothing awaiting service right now.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map((r, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${r.username}</strong></td>
+                <td>${r.brand} ${r.model}</td>
+                <td><button class="btn btn-sm btn-primary" onclick="openCompleteModal(${r.id}, '${r.username}', '${r.brand} ${r.model}')">🔧 Mark Completed</button></td>
+            </tr>`).join('');
+    } catch(e) {}
+}
+
+async function loadAll() {
+    try {
+        const res  = await fetch('/serviceRecords', { headers: authHeaders() });
+        const data = await res.json();
+        const completed = data.filter(r => r.status === 'COMPLETED');
+        const tbody = document.getElementById('allTableBody');
+        if (completed.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#555;">No completed services yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = completed.slice().reverse().map((r, i) => `
+            <tr>
+                <td>${i+1}</td>
+                <td><strong>${r.username}</strong></td>
+                <td>${r.brand} ${r.model}</td>
+                <td>${formatDate(r.serviceDate)}</td>
+                <td style="font-size:12px;color:#7a4040;">${r.description || '—'}</td>
+            </tr>`).join('');
+    } catch(e) {}
+}
+
+async function approveService(id) {
+    try {
+        const res  = await fetch('/serviceRecords/approve/' + id, { method:'POST', headers: authHeaders() });
+        const data = await res.json();
+        if (res.ok) { showAlert('success', '✅ ' + data.message); loadPending(); loadApproved(); }
+        else { showAlert('error', '❌ ' + (data.message || 'Failed.')); }
+    } catch(e) { showAlert('error', '❌ Connection error.'); }
+}
+
+async function rejectService(id) {
+    const reason = prompt('Reason for rejection (e.g. too many vehicles in service):');
+    if (reason === null) return; // cancelled
+    try {
+        const res  = await fetch('/serviceRecords/reject/' + id, {
+            method:'POST', headers: authHeaders(),
+            body: JSON.stringify({ reason: reason || 'Service could not be scheduled at this time.' })
+        });
+        const data = await res.json();
+        if (res.ok) { showAlert('success', '🚫 ' + data.message); loadPending(); }
+        else { showAlert('error', '❌ ' + (data.message || 'Failed.')); }
+    } catch(e) { showAlert('error', '❌ Connection error.'); }
+}
+
+function openCompleteModal(id, username, vehicleName) {
+    completeTargetId = id;
+    document.getElementById('completeModalInfo').textContent = username + ' — ' + vehicleName;
+    document.getElementById('completeNotes').value = '';
+    document.getElementById('completeModal').style.display = 'flex';
+}
+
+function closeCompleteModal() {
+    document.getElementById('completeModal').style.display = 'none';
+    completeTargetId = null;
+}
+
+async function submitComplete() {
+    const notes = document.getElementById('completeNotes').value.trim();
+    if (!notes) { showAlert('error', 'Please describe what was done.'); return; }
+    try {
+        const res  = await fetch('/serviceRecords/complete/' + completeTargetId, {
+            method:'POST', headers: authHeaders(),
+            body: JSON.stringify({ description: notes })
+        });
+        const data = await res.json();
+        closeCompleteModal();
+        if (res.ok) { showAlert('success', '✅ ' + data.message); loadApproved(); loadAll(); }
+        else { showAlert('error', '❌ ' + (data.message || 'Failed.')); }
+    } catch(e) {
+        closeCompleteModal();
+        showAlert('error', '❌ Connection error.');
+    }
+}
+
+async function addRecord() {
+    const userId      = document.getElementById('userId').value;
+    const serviceDate = document.getElementById('serviceDate').value;
+    const description = document.getElementById('description').value.trim();
+
+    if (!userId || !serviceDate || !description) { showAlert('error', 'Fill all fields.'); return; }
+
+    // Auto-find the vehicle owned by this customer via /sale endpoint
+    try {
+        const salesRes = await fetch('/sale', { headers: authHeaders() });
+        const sales    = await salesRes.json();
+        const custSale = sales.find(s => String(s.userId) === String(userId) || String(s.username) === String(userId));
+
+        // Try matching by userId in sales list - backend returns username, so fetch user details
+        const allSales = sales.filter(s => {
+            // sales list returns {vehicleBrand, vehicleModel, username, saleDate}
+            // We need to match by userId - fetch /user/customers to map
+            return true;
+        });
+
+        // Simpler: use the dedicated endpoint
+        const uRes  = await fetch('/user/customers', { headers: authHeaders() });
+        const users = await uRes.json();
+        const uObj  = users.find(u => String(u.id) === String(userId));
+        if (!uObj) { showAlert('error', 'Customer not found.'); return; }
+
+        const matchedSale = sales.find(s => s.username === uObj.username);
+        if (!matchedSale) {
+            showAlert('error', 'This customer does not own a vehicle yet. Cannot log service.');
+            return;
+        }
+
+        const body = {
+            vehicle: { id: matchedSale.vehicleId },
+            user:    { id: parseInt(userId) },
+            serviceDate,
+            description
+        };
+
+        const res = await fetch('/serviceRecords', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify(body)
+        });
+        if (res.ok) {
+            showAlert('success', 'Service record saved!');
+            document.getElementById('description').value = '';
+            loadAll();
+        } else {
+            const data = await res.json().catch(() => ({}));
+            showAlert('error', data.message || 'Could not save record.');
+        }
+    } catch(e) { showAlert('error', 'Connection error.'); }
+}
+
+function showAlert(type, msg) {
+    const box = document.getElementById('alertBox');
+    box.innerHTML = '<div class="alert alert-' + type + '">' + msg + '</div>';
+    setTimeout(() => box.innerHTML = '', 3500);
+}
+</script>
+</body></html>
